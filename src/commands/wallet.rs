@@ -83,11 +83,22 @@ fn guard_overwrite(force: bool) -> Result<()> {
 fn cmd_create(output: OutputFormat, force: bool, signature_type: &str) -> Result<()> {
     guard_overwrite(force)?;
 
-    let signer = LocalSigner::random().with_chain_id(Some(POLYGON));
-    let address = signer.address();
-    let key_hex = format!("{:#x}", signer.to_bytes());
+    // Create wallet in OWS vault — key is generated and encrypted internally.
+    let mut nonce = [0u8; 4];
+    getrandom::getrandom(&mut nonce).map_err(|e| anyhow::anyhow!("Failed to generate nonce: {e}"))?;
+    let ows_id = crate::ows::create_wallet(&format!("polymarket-{}", hex::encode(nonce)))
+        .context("Failed to create OWS wallet")?;
 
-    config::save_wallet(&key_hex, POLYGON, signature_type)?;
+    // Export briefly to derive the address, then wipe.
+    let exported = crate::ows::export_private_key(&ows_id)?;
+    let signer = LocalSigner::from_str(&exported)
+        .context("Invalid key from OWS")?
+        .with_chain_id(Some(POLYGON));
+    let address = signer.address();
+    drop(exported);
+    drop(signer);
+
+    config::save_config(POLYGON, signature_type, &ows_id)?;
     let config_path = config::config_path()?;
     let proxy_addr = derive_proxy_wallet(address, POLYGON);
 
@@ -112,8 +123,7 @@ fn cmd_create(output: OutputFormat, force: bool, signature_type: &str) -> Result
             println!("Signature type: {signature_type}");
             println!("Config:         {}", config_path.display());
             println!();
-            println!("IMPORTANT: Back up your private key from the config file.");
-            println!("           If lost, your funds cannot be recovered.");
+            println!("Private key encrypted in OWS vault.");
         }
     }
     Ok(())
@@ -122,13 +132,15 @@ fn cmd_create(output: OutputFormat, force: bool, signature_type: &str) -> Result
 fn cmd_import(key: &str, output: OutputFormat, force: bool, signature_type: &str) -> Result<()> {
     guard_overwrite(force)?;
 
+    // Validate the key first.
     let signer = LocalSigner::from_str(key)
         .context("Invalid private key")?
         .with_chain_id(Some(POLYGON));
     let address = signer.address();
-    let key_hex = format!("{:#x}", signer.to_bytes());
+    drop(signer);
 
-    config::save_wallet(&key_hex, POLYGON, signature_type)?;
+    // Import into OWS vault.
+    config::save_wallet(key, POLYGON, signature_type)?;
     let config_path = config::config_path()?;
     let proxy_addr = derive_proxy_wallet(address, POLYGON);
 
@@ -152,6 +164,8 @@ fn cmd_import(key: &str, output: OutputFormat, force: bool, signature_type: &str
             }
             println!("Signature type: {signature_type}");
             println!("Config:         {}", config_path.display());
+            println!();
+            println!("Private key encrypted in OWS vault.");
         }
     }
     Ok(())

@@ -25,12 +25,18 @@ rust_decimal = "1"
 anyhow = "1"
 chrono = "0.4"
 dirs = "6"
+ows-core = "1.0.0"
+ows-lib = "1.0.0"
+getrandom = "0.2"
+hex = "0.4"
+zeroize = "1"
 rustyline = "15"
 
 [dev-dependencies]
 assert_cmd = "2"
 predicates = "3"
 rust_decimal_macros = "1"
+tempfile = "3"
 
 [profile.release]
 lto = "thin"
