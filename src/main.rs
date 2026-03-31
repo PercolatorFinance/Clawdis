@@ -2,6 +2,7 @@ mod auth;
 mod commands;
 mod config;
 mod output;
+mod ows;
 mod shell;
 
 use std::process::ExitCode;
@@ -70,6 +71,11 @@ enum Commands {
 async fn main() -> ExitCode {
     let cli = Cli::parse();
     let output = cli.output;
+
+    // Migrate plaintext keys to OWS vault on startup.
+    if let Err(e) = config::migrate_to_ows() {
+        eprintln!("Warning: OWS key migration failed: {e}");
+    }
 
     if let Err(e) = run(cli).await {
         output::print_error(&e, output);

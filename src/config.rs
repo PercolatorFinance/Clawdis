@@ -13,10 +13,15 @@ pub(crate) const NO_WALLET_MSG: &str =
 
 #[derive(Serialize, Deserialize)]
 pub(crate) struct Config {
+    /// Plaintext private key (legacy — migrated to OWS on first use).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub private_key: String,
     pub chain_id: u64,
     #[serde(default = "default_signature_type")]
     pub signature_type: String,
+    /// OWS wallet UUID for encrypted key storage.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ows_id: Option<String>,
 }
 
 fn default_signature_type() -> String {
@@ -55,10 +60,40 @@ pub fn config_exists() -> bool {
 }
 
 pub fn delete_config() -> Result<()> {
+    // Delete the OWS wallet if one is referenced.
+    if let Some(config) = load_config()? {
+        if let Some(ref ows_id) = config.ows_id {
+            let _ = crate::ows::delete_wallet(ows_id);
+        }
+    }
     let dir = config_dir()?;
     if dir.exists() {
         fs::remove_dir_all(&dir).context("Failed to remove config directory")?;
     }
+    Ok(())
+}
+
+/// Migrate plaintext private key to OWS vault.
+///
+/// If config has a `private_key` but no `ows_id`, imports the key into
+/// OWS and rewrites config without the plaintext key.
+pub fn migrate_to_ows() -> Result<()> {
+    let Some(config) = load_config()? else {
+        return Ok(());
+    };
+    if config.ows_id.is_some() || config.private_key.is_empty() {
+        return Ok(());
+    }
+
+    let mut nonce = [0u8; 4];
+    getrandom::getrandom(&mut nonce).context("Failed to generate nonce")?;
+    let wallet_name = format!("polymarket-{}", hex::encode(nonce));
+
+    let ows_id = crate::ows::import_private_key(&wallet_name, &config.private_key)
+        .context("Failed to migrate key to OWS vault")?;
+
+    save_config(config.chain_id, &config.signature_type, &ows_id)?;
+    eprintln!("Migrated wallet key to OWS encrypted vault.");
     Ok(())
 }
 
@@ -95,6 +130,17 @@ pub fn resolve_signature_type(cli_flag: Option<&str>) -> Result<String> {
 }
 
 pub fn save_wallet(key: &str, chain_id: u64, signature_type: &str) -> Result<()> {
+    // Store the private key in OWS encrypted vault.
+    let mut nonce = [0u8; 4];
+    getrandom::getrandom(&mut nonce).map_err(|e| anyhow::anyhow!("Failed to generate nonce: {e}"))?;
+    let ows_id = crate::ows::import_private_key(&format!("polymarket-{}", hex::encode(nonce)), key)
+        .context("Failed to store key in OWS vault")?;
+
+    save_config(chain_id, signature_type, &ows_id)
+}
+
+/// Save config with an OWS wallet ID (no plaintext key on disk).
+pub fn save_config(chain_id: u64, signature_type: &str, ows_id: &str) -> Result<()> {
     let dir = config_dir()?;
     fs::create_dir_all(&dir).context("Failed to create config directory")?;
 
@@ -105,9 +151,10 @@ pub fn save_wallet(key: &str, chain_id: u64, signature_type: &str) -> Result<()>
     }
 
     let config = Config {
-        private_key: key.to_string(),
+        private_key: String::new(),
         chain_id,
         signature_type: signature_type.to_string(),
+        ows_id: Some(ows_id.to_string()),
     };
     let json = serde_json::to_string_pretty(&config)?;
     let path = config_path()?;
@@ -135,7 +182,7 @@ pub fn save_wallet(key: &str, chain_id: u64, signature_type: &str) -> Result<()>
     Ok(())
 }
 
-/// Priority: CLI flag > env var > config file.
+/// Priority: CLI flag > env var > OWS vault (via config ows_id) > legacy config key.
 pub fn resolve_key(cli_flag: Option<&str>) -> Result<(Option<String>, KeySource)> {
     if let Some(key) = cli_flag {
         return Ok((Some(key.to_string()), KeySource::Flag));
@@ -146,7 +193,19 @@ pub fn resolve_key(cli_flag: Option<&str>) -> Result<(Option<String>, KeySource)
         return Ok((Some(key), KeySource::EnvVar));
     }
     if let Some(config) = load_config()? {
-        return Ok((Some(config.private_key), KeySource::ConfigFile));
+        // OWS vault takes priority over legacy plaintext key.
+        if let Some(ref ows_id) = config.ows_id {
+            let key = crate::ows::export_private_key(ows_id)
+                .context("Failed to decrypt key from OWS vault")?;
+            // Clone into plain String for the existing resolve_key API.
+            // The Zeroizing source is dropped immediately after, wiping
+            // the original. The clone is short-lived — callers construct
+            // a signer and drop the string.
+            return Ok((Some((*key).clone()), KeySource::ConfigFile));
+        }
+        if !config.private_key.is_empty() {
+            return Ok((Some(config.private_key), KeySource::ConfigFile));
+        }
     }
     Ok((None, KeySource::None))
 }
