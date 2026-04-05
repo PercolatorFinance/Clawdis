@@ -4,7 +4,9 @@ use alloy::sol;
 use alloy::sol_types::SolCall;
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use polymarket_client_sdk::ctf::types::{CollectionIdRequest, ConditionIdRequest, PositionIdRequest};
+use polymarket_client_sdk::ctf::types::{
+    CollectionIdRequest, ConditionIdRequest, PositionIdRequest,
+};
 use polymarket_client_sdk::types::{Address, B256};
 use polymarket_client_sdk::{POLYGON, ctf};
 use rust_decimal::Decimal;
@@ -225,9 +227,8 @@ fn is_proxy_mode(signature_type: Option<&str>) -> Result<bool> {
     Ok(crate::config::resolve_signature_type(signature_type)? == "proxy")
 }
 
-const PROXY_FACTORY: Address = polymarket_client_sdk::types::address!(
-    "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052"
-);
+const PROXY_FACTORY: Address =
+    polymarket_client_sdk::types::address!("0xaB45c5A4B0c941a2F231C04C3f49182e1A254052");
 
 async fn send_ctf_call(
     private_key: Option<&str>,
