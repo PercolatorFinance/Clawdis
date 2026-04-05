@@ -1,10 +1,10 @@
 use alloy::primitives::U256;
+use alloy::providers::Provider as _;
+use alloy::sol;
+use alloy::sol_types::SolCall;
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use polymarket_client_sdk::ctf::types::{
-    CollectionIdRequest, ConditionIdRequest, MergePositionsRequest, PositionIdRequest,
-    RedeemNegRiskRequest, RedeemPositionsRequest, SplitPositionRequest,
-};
+use polymarket_client_sdk::ctf::types::{CollectionIdRequest, ConditionIdRequest, PositionIdRequest};
 use polymarket_client_sdk::types::{Address, B256};
 use polymarket_client_sdk::{POLYGON, ctf};
 use rust_decimal::Decimal;
@@ -14,6 +14,56 @@ use crate::output::OutputFormat;
 use crate::output::ctf as ctf_output;
 
 use super::{USDC_ADDRESS_STR, USDC_DECIMALS};
+
+// Polymarket Proxy Wallet Factory interface (CallType: INVALID=0, CALL=1, DELEGATECALL=2)
+sol! {
+    #[sol(rpc)]
+    interface IProxyWallet {
+        struct ProxyCall {
+            uint8 typeCode;
+            address to;
+            uint256 value;
+            bytes data;
+        }
+
+        function proxy(ProxyCall[] memory calls)
+            external payable returns (bytes[] memory returnValues);
+    }
+}
+
+sol! {
+    interface IConditionalTokens {
+        function splitPosition(
+            address collateralToken,
+            bytes32 parentCollectionId,
+            bytes32 conditionId,
+            uint256[] calldata partition,
+            uint256 amount
+        ) external;
+
+        function mergePositions(
+            address collateralToken,
+            bytes32 parentCollectionId,
+            bytes32 conditionId,
+            uint256[] calldata partition,
+            uint256 amount
+        ) external;
+
+        function redeemPositions(
+            address collateralToken,
+            bytes32 parentCollectionId,
+            bytes32 conditionId,
+            uint256[] calldata indexSets
+        ) external;
+    }
+
+    interface INegRiskAdapter {
+        function redeemPositions(
+            bytes32 conditionId,
+            uint256[] calldata amounts
+        ) external;
+    }
+}
 
 #[derive(Args)]
 pub struct CtfArgs {
@@ -171,7 +221,54 @@ fn binary_u256_vec() -> Vec<U256> {
     DEFAULT_BINARY_SETS.iter().map(|&n| U256::from(n)).collect()
 }
 
-pub async fn execute(args: CtfArgs, output: OutputFormat, private_key: Option<&str>) -> Result<()> {
+fn is_proxy_mode(signature_type: Option<&str>) -> Result<bool> {
+    Ok(crate::config::resolve_signature_type(signature_type)? == "proxy")
+}
+
+const PROXY_FACTORY: Address = polymarket_client_sdk::types::address!(
+    "0xaB45c5A4B0c941a2F231C04C3f49182e1A254052"
+);
+
+async fn send_ctf_call(
+    private_key: Option<&str>,
+    use_proxy: bool,
+    target: Address,
+    calldata: Vec<u8>,
+) -> Result<(B256, u64)> {
+    let provider = auth::create_provider(private_key).await?;
+
+    let (tx_hash, block_number) = if use_proxy {
+        let factory = IProxyWallet::new(PROXY_FACTORY, &provider);
+        let call = IProxyWallet::ProxyCall {
+            typeCode: 1,
+            to: target,
+            value: U256::ZERO,
+            data: calldata.into(),
+        };
+        let pending = factory.proxy(vec![call]).send().await?;
+        let hash = *pending.tx_hash();
+        let receipt = pending.get_receipt().await?;
+        (hash, receipt.block_number)
+    } else {
+        let tx = alloy::rpc::types::TransactionRequest::default()
+            .to(target)
+            .input(alloy::primitives::Bytes::from(calldata).into());
+        let pending = provider.send_transaction(tx).await?;
+        let hash = *pending.tx_hash();
+        let receipt = pending.get_receipt().await?;
+        (hash, receipt.block_number)
+    };
+
+    let block_number = block_number.context("Block number not available in receipt")?;
+    Ok((tx_hash, block_number))
+}
+
+pub async fn execute(
+    args: CtfArgs,
+    output: OutputFormat,
+    private_key: Option<&str>,
+    signature_type: Option<&str>,
+) -> Result<()> {
     match args.command {
         CtfCommand::Split {
             condition,
@@ -187,23 +284,24 @@ pub async fn execute(args: CtfArgs, output: OutputFormat, private_key: Option<&s
                 None => binary_u256_vec(),
             };
 
-            let provider = auth::create_provider(private_key).await?;
-            let client = ctf::Client::new(provider, POLYGON)?;
+            let proxy = is_proxy_mode(signature_type)?;
+            let config = polymarket_client_sdk::contract_config(POLYGON, false)
+                .context("CTF contract config not found")?;
+            let calldata = IConditionalTokens::splitPositionCall {
+                collateralToken: collateral,
+                parentCollectionId: parent,
+                conditionId: condition,
+                partition,
+                amount: usdc_amount,
+            }
+            .abi_encode();
 
-            let req = SplitPositionRequest::builder()
-                .collateral_token(collateral)
-                .parent_collection_id(parent)
-                .condition_id(condition)
-                .partition(partition)
-                .amount(usdc_amount)
-                .build();
+            let (tx_hash, block_number) =
+                send_ctf_call(private_key, proxy, config.conditional_tokens, calldata)
+                    .await
+                    .context("Split position failed")?;
 
-            let resp = client
-                .split_position(&req)
-                .await
-                .context("Split position failed")?;
-
-            ctf_output::print_tx_result("split", resp.transaction_hash, resp.block_number, &output)
+            ctf_output::print_tx_result("split", tx_hash, block_number, &output)
         }
         CtfCommand::Merge {
             condition,
@@ -219,23 +317,24 @@ pub async fn execute(args: CtfArgs, output: OutputFormat, private_key: Option<&s
                 None => binary_u256_vec(),
             };
 
-            let provider = auth::create_provider(private_key).await?;
-            let client = ctf::Client::new(provider, POLYGON)?;
+            let proxy = is_proxy_mode(signature_type)?;
+            let config = polymarket_client_sdk::contract_config(POLYGON, false)
+                .context("CTF contract config not found")?;
+            let calldata = IConditionalTokens::mergePositionsCall {
+                collateralToken: collateral,
+                parentCollectionId: parent,
+                conditionId: condition,
+                partition,
+                amount: usdc_amount,
+            }
+            .abi_encode();
 
-            let req = MergePositionsRequest::builder()
-                .collateral_token(collateral)
-                .parent_collection_id(parent)
-                .condition_id(condition)
-                .partition(partition)
-                .amount(usdc_amount)
-                .build();
+            let (tx_hash, block_number) =
+                send_ctf_call(private_key, proxy, config.conditional_tokens, calldata)
+                    .await
+                    .context("Merge positions failed")?;
 
-            let resp = client
-                .merge_positions(&req)
-                .await
-                .context("Merge positions failed")?;
-
-            ctf_output::print_tx_result("merge", resp.transaction_hash, resp.block_number, &output)
+            ctf_output::print_tx_result("merge", tx_hash, block_number, &output)
         }
         CtfCommand::Redeem {
             condition,
@@ -249,45 +348,44 @@ pub async fn execute(args: CtfArgs, output: OutputFormat, private_key: Option<&s
                 None => binary_u256_vec(),
             };
 
-            let provider = auth::create_provider(private_key).await?;
-            let client = ctf::Client::new(provider, POLYGON)?;
+            let proxy = is_proxy_mode(signature_type)?;
+            let config = polymarket_client_sdk::contract_config(POLYGON, false)
+                .context("CTF contract config not found")?;
+            let calldata = IConditionalTokens::redeemPositionsCall {
+                collateralToken: collateral,
+                parentCollectionId: parent,
+                conditionId: condition,
+                indexSets: index_sets,
+            }
+            .abi_encode();
 
-            let req = RedeemPositionsRequest::builder()
-                .collateral_token(collateral)
-                .parent_collection_id(parent)
-                .condition_id(condition)
-                .index_sets(index_sets)
-                .build();
+            let (tx_hash, block_number) =
+                send_ctf_call(private_key, proxy, config.conditional_tokens, calldata)
+                    .await
+                    .context("Redeem positions failed")?;
 
-            let resp = client
-                .redeem_positions(&req)
-                .await
-                .context("Redeem positions failed")?;
-
-            ctf_output::print_tx_result("redeem", resp.transaction_hash, resp.block_number, &output)
+            ctf_output::print_tx_result("redeem", tx_hash, block_number, &output)
         }
         CtfCommand::RedeemNegRisk { condition, amounts } => {
             let amounts = parse_usdc_amounts(&amounts)?;
 
-            let provider = auth::create_provider(private_key).await?;
-            let client = ctf::Client::with_neg_risk(provider, POLYGON)?;
+            let proxy = is_proxy_mode(signature_type)?;
+            let config = polymarket_client_sdk::contract_config(POLYGON, true)
+                .context("NegRisk contract config not found")?;
+            let target = config
+                .neg_risk_adapter
+                .context("NegRisk adapter not configured")?;
+            let calldata = INegRiskAdapter::redeemPositionsCall {
+                conditionId: condition,
+                amounts,
+            }
+            .abi_encode();
 
-            let req = RedeemNegRiskRequest::builder()
-                .condition_id(condition)
-                .amounts(amounts)
-                .build();
-
-            let resp = client
-                .redeem_neg_risk(&req)
+            let (tx_hash, block_number) = send_ctf_call(private_key, proxy, target, calldata)
                 .await
                 .context("Redeem neg-risk positions failed")?;
 
-            ctf_output::print_tx_result(
-                "redeem-neg-risk",
-                resp.transaction_hash,
-                resp.block_number,
-                &output,
-            )
+            ctf_output::print_tx_result("redeem-neg-risk", tx_hash, block_number, &output)
         }
         CtfCommand::ConditionId {
             oracle,

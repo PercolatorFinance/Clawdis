@@ -109,7 +109,13 @@ pub(crate) async fn run(cli: Cli) -> anyhow::Result<()> {
             .await
         }
         Commands::Ctf(args) => {
-            commands::ctf::execute(args, cli.output, cli.private_key.as_deref()).await
+            commands::ctf::execute(
+                args,
+                cli.output,
+                cli.private_key.as_deref(),
+                cli.signature_type.as_deref(),
+            )
+            .await
         }
         Commands::Data(args) => commands::data::execute(&data, args, cli.output).await,
         Commands::Bridge(args) => commands::bridge::execute(&bridge, args, cli.output).await,
