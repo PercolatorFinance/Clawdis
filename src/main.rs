@@ -97,7 +97,13 @@ pub(crate) async fn run(cli: Cli) -> anyhow::Result<()> {
         Commands::Profiles(args) => commands::profiles::execute(&gamma, args, cli.output).await,
         Commands::Sports(args) => commands::sports::execute(&gamma, args, cli.output).await,
         Commands::Approve(args) => {
-            commands::approve::execute(args, cli.output, cli.private_key.as_deref()).await
+            commands::approve::execute(
+                args,
+                cli.output,
+                cli.private_key.as_deref(),
+                cli.signature_type.as_deref(),
+            )
+            .await
         }
         Commands::Clob(args) => {
             commands::clob::execute(

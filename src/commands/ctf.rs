@@ -1,5 +1,4 @@
 use alloy::primitives::U256;
-use alloy::providers::Provider as _;
 use alloy::sol;
 use alloy::sol_types::SolCall;
 use anyhow::{Context, Result};
@@ -15,23 +14,8 @@ use crate::auth;
 use crate::output::OutputFormat;
 use crate::output::ctf as ctf_output;
 
+use super::proxy;
 use super::{USDC_ADDRESS_STR, USDC_DECIMALS};
-
-// Polymarket Proxy Wallet Factory interface (CallType: INVALID=0, CALL=1, DELEGATECALL=2)
-sol! {
-    #[sol(rpc)]
-    interface IProxyWallet {
-        struct ProxyCall {
-            uint8 typeCode;
-            address to;
-            uint256 value;
-            bytes data;
-        }
-
-        function proxy(ProxyCall[] memory calls)
-            external payable returns (bytes[] memory returnValues);
-    }
-}
 
 sol! {
     interface IConditionalTokens {
@@ -223,47 +207,6 @@ fn binary_u256_vec() -> Vec<U256> {
     DEFAULT_BINARY_SETS.iter().map(|&n| U256::from(n)).collect()
 }
 
-fn is_proxy_mode(signature_type: Option<&str>) -> Result<bool> {
-    Ok(crate::config::resolve_signature_type(signature_type)? == "proxy")
-}
-
-const PROXY_FACTORY: Address =
-    polymarket_client_sdk::types::address!("0xaB45c5A4B0c941a2F231C04C3f49182e1A254052");
-
-async fn send_ctf_call(
-    private_key: Option<&str>,
-    use_proxy: bool,
-    target: Address,
-    calldata: Vec<u8>,
-) -> Result<(B256, u64)> {
-    let provider = auth::create_provider(private_key).await?;
-
-    let (tx_hash, block_number) = if use_proxy {
-        let factory = IProxyWallet::new(PROXY_FACTORY, &provider);
-        let call = IProxyWallet::ProxyCall {
-            typeCode: 1,
-            to: target,
-            value: U256::ZERO,
-            data: calldata.into(),
-        };
-        let pending = factory.proxy(vec![call]).send().await?;
-        let hash = *pending.tx_hash();
-        let receipt = pending.get_receipt().await?;
-        (hash, receipt.block_number)
-    } else {
-        let tx = alloy::rpc::types::TransactionRequest::default()
-            .to(target)
-            .input(alloy::primitives::Bytes::from(calldata).into());
-        let pending = provider.send_transaction(tx).await?;
-        let hash = *pending.tx_hash();
-        let receipt = pending.get_receipt().await?;
-        (hash, receipt.block_number)
-    };
-
-    let block_number = block_number.context("Block number not available in receipt")?;
-    Ok((tx_hash, block_number))
-}
-
 pub async fn execute(
     args: CtfArgs,
     output: OutputFormat,
@@ -285,7 +228,7 @@ pub async fn execute(
                 None => binary_u256_vec(),
             };
 
-            let proxy = is_proxy_mode(signature_type)?;
+            let proxy = proxy::is_proxy_mode(signature_type)?;
             let config = polymarket_client_sdk::contract_config(POLYGON, false)
                 .context("CTF contract config not found")?;
             let calldata = IConditionalTokens::splitPositionCall {
@@ -298,7 +241,7 @@ pub async fn execute(
             .abi_encode();
 
             let (tx_hash, block_number) =
-                send_ctf_call(private_key, proxy, config.conditional_tokens, calldata)
+                proxy::send_call(private_key, proxy, config.conditional_tokens, calldata)
                     .await
                     .context("Split position failed")?;
 
@@ -318,7 +261,7 @@ pub async fn execute(
                 None => binary_u256_vec(),
             };
 
-            let proxy = is_proxy_mode(signature_type)?;
+            let proxy = proxy::is_proxy_mode(signature_type)?;
             let config = polymarket_client_sdk::contract_config(POLYGON, false)
                 .context("CTF contract config not found")?;
             let calldata = IConditionalTokens::mergePositionsCall {
@@ -331,7 +274,7 @@ pub async fn execute(
             .abi_encode();
 
             let (tx_hash, block_number) =
-                send_ctf_call(private_key, proxy, config.conditional_tokens, calldata)
+                proxy::send_call(private_key, proxy, config.conditional_tokens, calldata)
                     .await
                     .context("Merge positions failed")?;
 
@@ -349,7 +292,7 @@ pub async fn execute(
                 None => binary_u256_vec(),
             };
 
-            let proxy = is_proxy_mode(signature_type)?;
+            let proxy = proxy::is_proxy_mode(signature_type)?;
             let config = polymarket_client_sdk::contract_config(POLYGON, false)
                 .context("CTF contract config not found")?;
             let calldata = IConditionalTokens::redeemPositionsCall {
@@ -361,7 +304,7 @@ pub async fn execute(
             .abi_encode();
 
             let (tx_hash, block_number) =
-                send_ctf_call(private_key, proxy, config.conditional_tokens, calldata)
+                proxy::send_call(private_key, proxy, config.conditional_tokens, calldata)
                     .await
                     .context("Redeem positions failed")?;
 
@@ -370,7 +313,7 @@ pub async fn execute(
         CtfCommand::RedeemNegRisk { condition, amounts } => {
             let amounts = parse_usdc_amounts(&amounts)?;
 
-            let proxy = is_proxy_mode(signature_type)?;
+            let proxy = proxy::is_proxy_mode(signature_type)?;
             let config = polymarket_client_sdk::contract_config(POLYGON, true)
                 .context("NegRisk contract config not found")?;
             let target = config
@@ -382,7 +325,7 @@ pub async fn execute(
             }
             .abi_encode();
 
-            let (tx_hash, block_number) = send_ctf_call(private_key, proxy, target, calldata)
+            let (tx_hash, block_number) = proxy::send_call(private_key, proxy, target, calldata)
                 .await
                 .context("Redeem neg-risk positions failed")?;
 
