@@ -161,104 +161,48 @@ async fn set(
     let mut results: Vec<serde_json::Value> = Vec::new();
     let mut step = 0;
 
-    if use_proxy {
-        for target in &targets {
-            step += 1;
-            let label = format!("USDC \u{2192} {}", target.name);
-            let calldata = IERC20::approveCall {
-                spender: target.address,
-                value: U256::MAX,
-            }
-            .abi_encode();
-            let (tx_hash, _) = proxy::send_call(private_key, true, USDC_ADDRESS, calldata)
-                .await
-                .context(format!("Failed USDC approval for {}", target.name))?;
-
-            match output {
-                OutputFormat::Table => print_tx_result(step, total, &label, tx_hash),
-                OutputFormat::Json => results.push(serde_json::json!({
-                    "step": step,
-                    "type": "erc20",
-                    "contract": target.name,
-                    "tx_hash": format!("{tx_hash}"),
-                })),
-            }
-
-            step += 1;
-            let label = format!("CTF  \u{2192} {}", target.name);
-            let calldata = IERC1155::setApprovalForAllCall {
-                operator: target.address,
-                approved: true,
-            }
-            .abi_encode();
-            let (tx_hash, _) =
-                proxy::send_call(private_key, true, config.conditional_tokens, calldata)
-                    .await
-                    .context(format!("Failed CTF approval for {}", target.name))?;
-
-            match output {
-                OutputFormat::Table => print_tx_result(step, total, &label, tx_hash),
-                OutputFormat::Json => results.push(serde_json::json!({
-                    "step": step,
-                    "type": "erc1155",
-                    "contract": target.name,
-                    "tx_hash": format!("{tx_hash}"),
-                })),
-            }
+    for target in &targets {
+        step += 1;
+        let label = format!("USDC \u{2192} {}", target.name);
+        let calldata = IERC20::approveCall {
+            spender: target.address,
+            value: U256::MAX,
         }
-    } else {
-        let provider = auth::create_provider(private_key).await?;
-        let usdc = IERC20::new(USDC_ADDRESS, provider.clone());
-        let ctf = IERC1155::new(config.conditional_tokens, provider.clone());
+        .abi_encode();
+        let (tx_hash, _) = proxy::send_call(private_key, use_proxy, USDC_ADDRESS, calldata)
+            .await
+            .context(format!("Failed USDC approval for {}", target.name))?;
 
-        for target in &targets {
-            step += 1;
-            let label = format!("USDC \u{2192} {}", target.name);
-            let tx_hash = usdc
-                .approve(target.address, U256::MAX)
-                .send()
-                .await
-                .context(format!("Failed to send USDC approval for {}", target.name))?
-                .watch()
-                .await
-                .context(format!(
-                    "Failed to confirm USDC approval for {}",
-                    target.name
-                ))?;
+        match output {
+            OutputFormat::Table => print_tx_result(step, total, &label, tx_hash),
+            OutputFormat::Json => results.push(serde_json::json!({
+                "step": step,
+                "type": "erc20",
+                "contract": target.name,
+                "tx_hash": format!("{tx_hash}"),
+            })),
+        }
 
-            match output {
-                OutputFormat::Table => print_tx_result(step, total, &label, tx_hash),
-                OutputFormat::Json => results.push(serde_json::json!({
-                    "step": step,
-                    "type": "erc20",
-                    "contract": target.name,
-                    "tx_hash": format!("{tx_hash}"),
-                })),
-            }
-
-            step += 1;
-            let label = format!("CTF  \u{2192} {}", target.name);
-            let tx_hash = ctf
-                .setApprovalForAll(target.address, true)
-                .send()
+        step += 1;
+        let label = format!("CTF  \u{2192} {}", target.name);
+        let calldata = IERC1155::setApprovalForAllCall {
+            operator: target.address,
+            approved: true,
+        }
+        .abi_encode();
+        let (tx_hash, _) =
+            proxy::send_call(private_key, use_proxy, config.conditional_tokens, calldata)
                 .await
-                .context(format!("Failed to send CTF approval for {}", target.name))?
-                .watch()
-                .await
-                .context(format!(
-                    "Failed to confirm CTF approval for {}",
-                    target.name
-                ))?;
+                .context(format!("Failed CTF approval for {}", target.name))?;
 
-            match output {
-                OutputFormat::Table => print_tx_result(step, total, &label, tx_hash),
-                OutputFormat::Json => results.push(serde_json::json!({
-                    "step": step,
-                    "type": "erc1155",
-                    "contract": target.name,
-                    "tx_hash": format!("{tx_hash}"),
-                })),
-            }
+        match output {
+            OutputFormat::Table => print_tx_result(step, total, &label, tx_hash),
+            OutputFormat::Json => results.push(serde_json::json!({
+                "step": step,
+                "type": "erc1155",
+                "contract": target.name,
+                "tx_hash": format!("{tx_hash}"),
+            })),
         }
     }
 
