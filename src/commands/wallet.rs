@@ -2,9 +2,9 @@ use std::str::FromStr;
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, Subcommand};
-use polymarket_client_sdk::auth::LocalSigner;
-use polymarket_client_sdk::auth::Signer as _;
-use polymarket_client_sdk::{POLYGON, derive_proxy_wallet};
+use polymarket_client_sdk_v2::auth::LocalSigner;
+use polymarket_client_sdk_v2::auth::Signer as _;
+use polymarket_client_sdk_v2::{POLYGON, derive_proxy_wallet};
 
 use crate::config;
 use crate::output::OutputFormat;

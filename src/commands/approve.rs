@@ -5,8 +5,8 @@ use alloy::primitives::U256;
 use alloy::sol;
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use polymarket_client_sdk::types::{Address, address};
-use polymarket_client_sdk::{POLYGON, contract_config};
+use polymarket_client_sdk_v2::types::{Address, address};
+use polymarket_client_sdk_v2::{POLYGON, contract_config};
 
 use crate::auth;
 use crate::output::OutputFormat;
@@ -97,7 +97,7 @@ async fn check(
         addr
     } else {
         let signer = auth::resolve_signer(private_key)?;
-        polymarket_client_sdk::auth::Signer::address(&signer)
+        polymarket_client_sdk_v2::auth::Signer::address(&signer)
     };
 
     let provider = auth::create_readonly_provider().await?;

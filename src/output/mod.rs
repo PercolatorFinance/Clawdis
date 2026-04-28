@@ -12,7 +12,7 @@ pub(crate) mod sports;
 pub(crate) mod tags;
 
 use chrono::{DateTime, Utc};
-use polymarket_client_sdk::types::Decimal;
+use polymarket_client_sdk_v2::types::Decimal;
 use rust_decimal::prelude::ToPrimitive;
 use tabled::Table;
 use tabled::settings::object::Columns;

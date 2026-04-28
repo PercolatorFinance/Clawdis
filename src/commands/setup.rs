@@ -2,9 +2,9 @@ use std::io::{self, BufRead, Write};
 use std::str::FromStr;
 
 use anyhow::{Context, Result};
-use polymarket_client_sdk::auth::{LocalSigner, Signer as _};
-use polymarket_client_sdk::types::Address;
-use polymarket_client_sdk::{POLYGON, derive_proxy_wallet};
+use polymarket_client_sdk_v2::auth::{LocalSigner, Signer as _};
+use polymarket_client_sdk_v2::types::Address;
+use polymarket_client_sdk_v2::{POLYGON, derive_proxy_wallet};
 
 use crate::config;
 

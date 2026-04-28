@@ -1,10 +1,10 @@
-use polymarket_client_sdk::auth::Credentials;
-use polymarket_client_sdk::clob::types::response::{
+use polymarket_client_sdk_v2::auth::Credentials;
+use polymarket_client_sdk_v2::clob::types::response::{
     ApiKeysResponse, BalanceAllowanceResponse, BanStatusResponse, CurrentRewardResponse,
     GeoblockResponse, MarketRewardResponse, NotificationResponse, Page, RewardsPercentagesResponse,
     TotalUserEarningResponse, UserEarningResponse, UserRewardsEarningResponse,
 };
-use polymarket_client_sdk::types::Decimal;
+use polymarket_client_sdk_v2::types::Decimal;
 use serde_json::json;
 use tabled::settings::Style;
 use tabled::{Table, Tabled};
@@ -262,12 +262,12 @@ pub fn print_earnings(
 }
 
 pub fn print_user_earnings_markets(
-    result: &[UserRewardsEarningResponse],
+    result: &Page<UserRewardsEarningResponse>,
     output: &OutputFormat,
 ) -> anyhow::Result<()> {
     match output {
         OutputFormat::Table => {
-            if result.is_empty() {
+            if result.data.is_empty() {
                 println!("No earnings data found.");
                 return Ok(());
             }
@@ -285,6 +285,7 @@ pub fn print_user_earnings_markets(
                 min_size: String,
             }
             let rows: Vec<Row> = result
+                .data
                 .iter()
                 .map(|e| Row {
                     question: truncate(&e.question, 40),
@@ -296,9 +297,13 @@ pub fn print_user_earnings_markets(
                 .collect();
             let table = Table::new(rows).with(Style::rounded()).to_string();
             println!("{table}");
+            if result.next_cursor != END_CURSOR {
+                println!("Next cursor: {}", result.next_cursor);
+            }
         }
         OutputFormat::Json => {
             let data: Vec<_> = result
+                .data
                 .iter()
                 .map(|e| {
                     json!({
@@ -333,7 +338,8 @@ pub fn print_user_earnings_markets(
                     })
                 })
                 .collect();
-            crate::output::print_json(&data)?;
+            let wrapper = json!({"data": data, "next_cursor": result.next_cursor});
+            crate::output::print_json(&wrapper)?;
         }
     }
     Ok(())

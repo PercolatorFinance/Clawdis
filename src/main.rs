@@ -82,9 +82,9 @@ async fn main() -> ExitCode {
 #[allow(clippy::too_many_lines)]
 pub(crate) async fn run(cli: Cli) -> anyhow::Result<()> {
     // Lazy-init so we only pay for the client we actually use.
-    let gamma = std::cell::LazyCell::new(polymarket_client_sdk::gamma::Client::default);
-    let data = std::cell::LazyCell::new(polymarket_client_sdk::data::Client::default);
-    let bridge = std::cell::LazyCell::new(polymarket_client_sdk::bridge::Client::default);
+    let gamma = std::cell::LazyCell::new(polymarket_client_sdk_v2::gamma::Client::default);
+    let data = std::cell::LazyCell::new(polymarket_client_sdk_v2::data::Client::default);
+    let bridge = std::cell::LazyCell::new(polymarket_client_sdk_v2::bridge::Client::default);
 
     match cli.command {
         Commands::Setup => commands::setup::execute(),

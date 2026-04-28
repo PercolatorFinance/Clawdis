@@ -1,12 +1,12 @@
 use alloy::primitives::U256;
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use polymarket_client_sdk::ctf::types::{
+use polymarket_client_sdk_v2::ctf::types::{
     CollectionIdRequest, ConditionIdRequest, MergePositionsRequest, PositionIdRequest,
     RedeemNegRiskRequest, RedeemPositionsRequest, SplitPositionRequest,
 };
-use polymarket_client_sdk::types::{Address, B256};
-use polymarket_client_sdk::{POLYGON, ctf};
+use polymarket_client_sdk_v2::types::{Address, B256};
+use polymarket_client_sdk_v2::{POLYGON, ctf};
 use rust_decimal::Decimal;
 
 use crate::auth;

@@ -1,4 +1,4 @@
-use polymarket_client_sdk::clob::types::response::{
+use polymarket_client_sdk_v2::clob::types::response::{
     CancelOrdersResponse, OpenOrderResponse, OrderScoringResponse, OrdersScoringResponse, Page,
     PostOrderResponse, TradeResponse,
 };

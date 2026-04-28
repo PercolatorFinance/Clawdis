@@ -1,4 +1,4 @@
-use polymarket_client_sdk::bridge::types::{
+use polymarket_client_sdk_v2::bridge::types::{
     DepositResponse, DepositTransactionStatus, StatusResponse, SupportedAssetsResponse,
 };
 use serde_json::json;
