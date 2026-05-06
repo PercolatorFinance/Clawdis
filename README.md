@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="assets/banner.png" alt="AleaStrategies" />
-</p>
+<h1 align="center">AleaStrategies</h1>
 
 <p align="center">
   <em>A multiplayer prediction market protocol on Solana. Stake land. Grow yield. Trade everything.</em>
