@@ -348,7 +348,8 @@ pub async fn execute(
             let condition_id = contract
                 .getConditionId(oracle, question, U256::from(outcomes))
                 .call()
-                .await?;
+                .await
+                .context("failed to get condition ID from contract")?;
             ctf_output::print_condition_id(condition_id, &output)
         }
         CtfCommand::CollectionId {
@@ -363,7 +364,8 @@ pub async fn execute(
             let collection_id = contract
                 .getCollectionId(parent, condition, U256::from(index_set))
                 .call()
-                .await?;
+                .await
+                .context("failed to get collection ID from contract")?;
             ctf_output::print_collection_id(collection_id, &output)
         }
         CtfCommand::PositionId {
@@ -375,7 +377,8 @@ pub async fn execute(
             let position_id = contract
                 .getPositionId(collateral, collection)
                 .call()
-                .await?;
+                .await
+                .context("failed to get position ID from contract")?;
             ctf_output::print_position_id(position_id, &output)
         }
     }
