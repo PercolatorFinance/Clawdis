@@ -124,3 +124,4 @@ Set your backend in `config.json` and point `characterPrompt` at the research fr
 ## License
 
 MIT — code is open. Follow me on [X](https://x.com/aleabitoreddit) if you want the actual analysis.
+
