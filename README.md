@@ -15,7 +15,7 @@
 <p align="center">
   <a href="https://www.tryclawdis.app/"><img src="https://img.shields.io/badge/tryclawdis.app-84D9B5?style=for-the-badge&logoColor=06231b" alt="Website" height="34" /></a>
   &nbsp;
-  <a href="https://www.prowl.finance/"><img src="https://img.shields.io/badge/Docs-0B0B0A?style=for-the-badge&logo=gitbook&logoColor=84D9B5" alt="Documentation" height="34" /></a>
+  <a href="https://www.tryclawdis.app/"><img src="https://img.shields.io/badge/Docs-0B0B0A?style=for-the-badge&logo=gitbook&logoColor=84D9B5" alt="Documentation" height="34" /></a>
   &nbsp;
   <a href="https://x.com/tryProwlFi"><img src="https://img.shields.io/badge/%40tryProwlFi-000000?style=for-the-badge&logo=x&logoColor=white" alt="X / Twitter" height="34" /></a>
   &nbsp;
@@ -58,7 +58,7 @@ infrastructure, not a mixer.
 <p align="center">
   <a href="https://www.tryclawdis.app/"><img src="https://img.shields.io/badge/tryclawdis.app-84D9B5?style=for-the-badge&logoColor=06231b" alt="Website" height="36" /></a>
   &nbsp;
-  <a href="https://www.prowl.finance/"><img src="https://img.shields.io/badge/Docs-0B0B0A?style=for-the-badge&logo=gitbook&logoColor=84D9B5" alt="Documentation" height="36" /></a>
+  <a href="https://www.tryclawdis.app/"><img src="https://img.shields.io/badge/Docs-0B0B0A?style=for-the-badge&logo=gitbook&logoColor=84D9B5" alt="Documentation" height="36" /></a>
   &nbsp;
   <a href="https://x.com/tryProwlFi"><img src="https://img.shields.io/badge/%40tryProwlFi-000000?style=for-the-badge&logo=x&logoColor=white" alt="X / Twitter" height="36" /></a>
   &nbsp;
@@ -178,4 +178,4 @@ Released under the [MIT License](./LICENSE). © ProwlFi Labs.
   <img src="https://cdn.prod.website-files.com/69082c5061a39922df8ed3b6/6a29738a781be9b01c228643_oJJkr4hP_400x400.jpg" alt="Clawdis" width="56" style="border-radius:50%" />
 </p>
 
-<p align="center"><sub>🐺 Built on Solana · <a href="https://www.prowl.finance/">prowl.finance</a></sub></p>
+<p align="center"><sub>Built on Solana · <a href="https://www.tryclawdis.app/">tryclawdis.app</a></sub></p>
